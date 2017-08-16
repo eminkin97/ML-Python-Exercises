@@ -1,8 +1,11 @@
 import numpy as np
 import math
 import random
+from scipy.optimize import fmin_cg
 
+num_input_size = 400
 num_hidden_layer_nodes = 25
+num_output_size = 10
 
 def readData():
     X = np.loadtxt('data/ex4data1.csv', delimiter = ',')
@@ -36,7 +39,9 @@ def feedForward(X, theta1, theta2, all):
     else:
         return a3
 
-def costFunction(X, y, theta1, theta2, K, lambda1):
+def costFunction(theta, X, y, K, lambda1):
+    theta1, theta2 = unflattenParams(theta)
+
     m = len(X)
     yVector = []
     for i in y:     #y to vector form e.g. 1 becomes [0 1 0 ... 0]
@@ -87,7 +92,9 @@ def randInitialize(numRows, numCols):
     theta = np.subtract(vals, np.ones((numRows, numCols)) * epsinit)
     return theta
 
-def backPropagation(X, y, theta1, theta2, K, lambda1):
+def backPropagation(theta, X, y, K, lambda1):
+    theta1, theta2 = unflattenParams(theta)
+
     m = len(X)
     yVector = []
     for i in y:     #y to vector form e.g. 1 becomes [0 1 0 ... 0]
@@ -135,7 +142,7 @@ def backPropagation(X, y, theta1, theta2, K, lambda1):
     theta1_grad = np.add(theta1_grad, reg_term_1)
     theta2_grad = np.add(theta2_grad, reg_term_2)
 
-    return (theta1_grad, theta2_grad)
+    return flattenParams(theta1_grad, theta2_grad)
 
 def checkGradient(X, y, theta1, theta2, theta1_grad, theta2_grad):
     i = 0
@@ -148,7 +155,7 @@ def checkGradient(X, y, theta1, theta2, theta1_grad, theta2_grad):
             q = random.randint(0, len(theta1[0]) - 1)
             epsarray[k, q] = eps
 
-            gradApprox = (costFunction(X, y, np.add(theta1, epsarray), theta2, 10, 1) - costFunction(X, y, np.subtract(theta1, epsarray), theta2, 10, 1))/(2 * eps)
+            gradApprox = (costFunction(flattenParams(np.add(theta1, epsarray), theta2), X, y, 10, 1) - costFunction(flattenParams(np.subtract(theta1, epsarray), theta2), X, y, 10, 1))/(2 * eps)
             print("Theta1_grad element %d, %d is %f while numerical grad element %d, %d, is %f" % (k, q, theta1_grad[k, q], k, q, gradApprox))
             j = j + 1
         i = i + 1
@@ -163,17 +170,60 @@ def checkGradient(X, y, theta1, theta2, theta1_grad, theta2_grad):
             q = random.randint(0, len(theta2[0]) - 1)
             epsarray[k, q] = eps
 
-            gradApprox = (costFunction(X, y, theta1, np.add(theta2, epsarray), 10, 1) - costFunction(X, y, theta1, np.subtract(theta2, epsarray), 10, 1))/(2 * eps)
+            gradApprox = (costFunction(flattenParams(theta1, np.add(theta2, epsarray)), X, y, 10, 1) - costFunction(flattenParams(theta1, np.subtract(theta2, epsarray)), X, y, 10, 1))/(2 * eps)
             print("Theta1_grad element %d, %d is %f while numerical grad element %d, %d, is %f" % (k, q, theta2_grad[k, q], k, q, gradApprox))
             j = j + 1
         i = i + 1
 
 
+def flattenParams(theta1, theta2):
+    #flattened params
+    flattenned_theta1 = np.array(theta1).flatten()
+    flattenned_theta2 = np.array(theta2).flatten()
+    flattenned_theta = np.append(flattenned_theta1, flattenned_theta2)
+    return flattenned_theta
+
+def unflattenParams(theta):
+    theta1_size = (num_hidden_layer_nodes * (num_input_size + 1))
+    theta2_size = (num_output_size * (num_hidden_layer_nodes + 1))
+
+    theta1 = np.reshape(theta[0:theta1_size], (num_hidden_layer_nodes, num_input_size + 1))
+    theta2 = np.reshape(theta[theta1_size:theta1_size+theta2_size], (num_output_size, num_hidden_layer_nodes + 1))
+    return (theta1, theta2)
+
+def predict(X, theta1_opt, theta2_opt, y):
+    numCorrect = 0
+    numWrong = 0
+
+    i = 0
+    while(i < len(X)):
+        ans = feedForward(X[i], theta1_opt, theta2_opt, False)
+
+        maxval = -1
+        maxindex = -1
+        j = 0
+        while (j < len(ans)):
+            if (ans[j] > maxval):
+                maxval = ans[j]
+                maxindex = j
+
+            j = j + 1
+        if (y[i] == (maxindex + 1)):
+            numCorrect = numCorrect + 1
+        else:
+            numWrong = numWrong + 1
+        i = i + 1
+
+    print("Percentage of classifications correct is: %f" % (float(numCorrect)/(numCorrect + numWrong)))
+
+def callbackfunc(x):
+    print("hi")
+
 if __name__ == "__main__":
     X, y, theta1, theta2 = readData()
 
     X = [np.insert(i, 0, 1) for i in X]     #Add bias column of 1s
-    print(costFunction(X, y, theta1, theta2, 10, 1))
+    print(costFunction(flattenParams(theta1, theta2), X, y, 10, 1))
 
     #Train neural network
     theta1 = randInitialize(num_hidden_layer_nodes, len(X[0]) - 1)
@@ -181,5 +231,14 @@ if __name__ == "__main__":
     theta1 = [np.insert(i, 0, 1) for i in theta1]     #Add column of 1s
     theta2 = [np.insert(i, 0, 1) for i in theta2]     #Add column of 1s
 
-    theta1_grad, theta2_grad = backPropagation(X, y, theta1, theta2, 10, 1)
+    theta_grad = backPropagation(flattenParams(theta1, theta2), X, y, 10, 1)
+    theta1_grad, theta2_grad = unflattenParams(theta_grad)
     #checkGradient(X, y, theta1, theta2, theta1_grad, theta2_grad)
+
+    #optimize using fmin
+    thetaOpt = fmin_cg(costFunction, flattenParams(theta1, theta2), backPropagation, args=(X,y,10,1), callback=callbackfunc, maxiter=50)
+    theta1_opt, theta2_opt = unflattenParams(thetaOpt)
+
+    #predict Percentage correct
+    predict(X, theta1_opt, theta2_opt, y)
+
